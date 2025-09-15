@@ -26,5 +26,3 @@ artifacts/
 # Sistema operativo
 .DS_Store
 Thumbs.db
-
-api/
