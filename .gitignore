@@ -1,0 +1,30 @@
+# Entorno virtual de Python
+venv/
+.env/
+*.pyc
+__pycache__/
+
+# Archivos temporales de Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Archivos de datos (si son pesados o confidenciales)
+data/
+*.csv
+
+# Archivos generados / modelos entrenados
+artifacts/
+*.pkl
+*.joblib
+
+# Archivos de logs
+*.log
+
+# Configuración de IDEs/editores
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+api/
