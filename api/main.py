@@ -100,7 +100,7 @@ def check_rate_limit(username: str):
     
     # Limpiar requests antiguos
     user_requests[:] = [req_time for req_time in user_requests 
-                       if current_time - req_time < RATE_WINDOW]
+                        if current_time - req_time < RATE_WINDOW]
     
     # Verificar límite
     if len(user_requests) >= RATE_LIMIT:
