@@ -23,7 +23,7 @@ app = FastAPI(
 # Configurar CORS, permite que navegadores web desde cualquier dominio puedan hacer peticiones a la API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especifica dominios específicos
+    allow_origins=["*"],  # Permite peticiones desde cualquier dominio (⚠️ inseguro en producción). En producción, especifica dominios específicos
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,6 +118,7 @@ def get_current_user(username: str = Depends(verify_credentials)):
     return username
 
 @app.get("/")
+# Función asíncrona (permite concurrencia)
 async def root():
     """Endpoint de salud del servicio"""
     return {
