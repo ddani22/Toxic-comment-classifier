@@ -9,18 +9,18 @@ import time
 from collections import defaultdict
 import logging
 
-# Configurar logging
+# Configurar logging, configura el sistema de logs para registrar eventos importantes de la API.
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Inicializar FastAPI
+# Crea la aplicación FastAPI
 app = FastAPI(
     title="Toxic Comment Classifier API",
     description="API para clasificar comentarios como tóxicos o no tóxicos",
     version="1.0.0"
 )
 
-# Configurar CORS para permitir peticiones desde diferentes dominios
+# Configurar CORS, permite que navegadores web desde cualquier dominio puedan hacer peticiones a la API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # En producción, especifica dominios específicos
