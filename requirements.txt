@@ -1,6 +1,5 @@
 numpy==2.3.2
 pandas==2.3.2
-# Use a stable scikit-learn 1.2.x series for broad compatibility with numpy/pandas and sklearn APIs
 scikit-learn==1.7.1
 joblib==1.5.1
 streamlit==1.48.1
@@ -9,3 +8,9 @@ altair==5.5.0
 vega_datasets==0.9.0
 fastapi==0.116.1
 uvicorn==0.35.0
+# Corregir JWT - el paquete correcto es PyJWT
+PyJWT==2.8.0
+# Faltantes necesarios para la API
+python-multipart==0.0.6
+# Para criptografía de JWT (opcional pero recomendado)
+cryptography==41.0.7
