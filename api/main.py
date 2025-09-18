@@ -2,12 +2,15 @@ from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 import joblib
 import secrets
 import time
-from collections import defaultdict
 import logging
+import os
+import jwt
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 # Configurar logging, configura el sistema de logs para registrar eventos importantes de la API.
 logging.basicConfig(level=logging.INFO)
@@ -44,25 +47,58 @@ RATE_LIMIT = 100  # requests per minute
 RATE_WINDOW = 60  # seconds
 
 # Cargar modelo y vectorizador
+clf = None
+vectorizer = None
+detailed_clf = None
+detailed_vectorizer = None
+toxicity_categories = None
+
 try:
-    clf = joblib.load("artifacts/model.pkl")
-    vectorizer = joblib.load("artifacts/vectorizer.pkl")
-    logger.info("Modelo y vectorizador cargados exitosamente")
+    # Artifacts básicos (obligatorios)
+    clf = joblib.load('artifacts/model.pkl')
+    vectorizer = joblib.load('artifacts/vectorizer.pkl')
+    logger.info("Modelo básico cargado correctamente")
 except Exception as e:
-    logger.error(f"Error cargando artefactos: {e}")
-    clf = None
-    vectorizer = None
+    logger.error(f"Error cargando modelo básico: {e}")
+
+try:
+    # Artifacts detallados (opcionales)
+    detailed_clf = joblib.load('artifacts/detailed_model.pkl')
+    detailed_vectorizer = joblib.load('artifacts/vectorizer_detailed.pkl')
+    toxicity_categories = joblib.load('artifacts/toxicity_categories.pkl')
+    logger.info("Modelos de clasificación detallada cargados correctamente")
+except Exception as e:
+    logger.warning(f"Clasificación detallada no disponible: {e}")
+
+# Definir categorías de toxicidad
+TOXICITY_CATEGORIES = [
+    'obscene', 'identity_attack', 'insult', 'threat', 'asian', 'atheist', 
+    'bisexual', 'black', 'buddhist', 'christian', 'female', 'heterosexual', 
+    'hindu', 'homosexual_gay_or_lesbian', 'intellectual_or_learning_disability', 
+    'jewish', 'latino', 'male', 'muslim', 'other_disability', 'other_gender', 
+    'other_race_or_ethnicity', 'other_religion', 'other_sexual_orientation', 
+    'physical_disability', 'psychiatric_or_mental_illness', 'transgender', 
+    'white', 'sexual_explicit'
+]
 
 # Modelos Pydantic para validación de datos
 class CommentRequest(BaseModel):
     text: str
-    include_probability: Optional[bool] = False
+    include_probability: bool = False
+    include_detailed_classification: bool = False
+    
+class DetailedClassification(BaseModel):
+    category: str
+    probability: float
+    is_present: bool
 
 class CommentResponse(BaseModel):
     text: str
     is_toxic: bool
     label: str
     probability: Optional[float] = None
+    detailed_classification: Optional[List[DetailedClassification]] = None
+    timestamp: str
 
 class BatchRequest(BaseModel):
     comments: List[str]
@@ -71,6 +107,8 @@ class BatchRequest(BaseModel):
 class BatchResponse(BaseModel):
     results: List[CommentResponse]
     total_processed: int
+    
+
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
     """Verificar credenciales de usuario"""
@@ -118,23 +156,26 @@ def get_current_user(username: str = Depends(verify_credentials)):
     return username
 
 @app.get("/")
-# Función asíncrona (permite concurrencia)
 async def root():
-    """Endpoint de salud del servicio"""
+    """Endpoint raíz"""
     return {
         "message": "Toxic Comment Classifier API",
         "status": "active",
-        "model_loaded": clf is not None and vectorizer is not None
+        "basic_model_loaded": clf is not None and vectorizer is not None,
+        "detailed_model_loaded": detailed_clf is not None and detailed_vectorizer is not None
     }
 
 @app.get("/health")
 async def health_check():
-    """Endpoint detallado de salud"""
+    """Health check detallado"""
     return {
         "status": "healthy" if clf is not None and vectorizer is not None else "unhealthy",
-        "model_available": clf is not None,
-        "vectorizer_available": vectorizer is not None,
-        "timestamp": time.time()
+        "basic_model_available": clf is not None,
+        "basic_vectorizer_available": vectorizer is not None,
+        "detailed_model_available": detailed_clf is not None,
+        "detailed_vectorizer_available": detailed_vectorizer is not None,
+        "toxicity_categories_available": toxicity_categories is not None,
+        "timestamp": datetime.now().isoformat()
     }
 
 @app.post("/classify", response_model=CommentResponse)
@@ -146,23 +187,66 @@ async def classify_comment(
     if clf is None or vectorizer is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modelo no disponible"
+            detail="Modelo básico no disponible"
         )
     
     try:
-        # Vectorizar texto
+        # Clasificación básica (siempre disponible)
         X_new = vectorizer.transform([request.text])
-        
-        # Predecir
         prediction = clf.predict(X_new)[0]
         is_toxic = bool(prediction)
         label = "Tóxico" if is_toxic else "No tóxico"
         
-        # Calcular probabilidad si se solicita
+        # Probabilidad básica
         probability = None
         if request.include_probability:
             prob_scores = clf.predict_proba(X_new)[0]
-            probability = float(prob_scores[1])  # Probabilidad de ser tóxico
+            probability = float(prob_scores[1]) if len(prob_scores) > 1 else 0.0
+        
+        # Clasificación detallada (solo si está disponible y es tóxico)
+        detailed_classification = None
+        if (request.include_detailed_classification and 
+            is_toxic and 
+            detailed_clf is not None and 
+            detailed_vectorizer is not None and
+            toxicity_categories is not None):
+            
+            try:
+                logger.info("Iniciando clasificación detallada...")
+                X_detailed = detailed_vectorizer.transform([request.text])
+                detailed_predictions = detailed_clf.predict(X_detailed)[0]
+                detailed_probabilities = detailed_clf.predict_proba(X_detailed)
+                
+                logger.info(f"Predicciones detalladas: {detailed_predictions.shape}")
+                logger.info(f"Categorías disponibles: {len(toxicity_categories)}")
+                
+                detailed_classification = []
+                for i, category in enumerate(toxicity_categories):
+                    if i < len(detailed_predictions):
+                        # Obtener probabilidad de clase positiva (corregido)
+                        prob = 0.0
+                        if i < len(detailed_probabilities):
+                            # detailed_probabilities[i] es array con [prob_negative, prob_positive]
+                            proba_array = detailed_probabilities[i][0]
+                            if len(proba_array) > 1:
+                                prob = float(proba_array[1])  # Probabilidad de clase positiva
+                        
+                        is_present = bool(detailed_predictions[i])
+                        
+                        detailed_classification.append(DetailedClassification(
+                            category=category,
+                            probability=prob,
+                            is_present=is_present
+                        ))
+                        
+                        if is_present:
+                            logger.info(f"Categoría detectada: {category} (prob: {prob:.3f})")
+                
+                logger.info(f"Total categorías en respuesta: {len(detailed_classification)}")
+                        
+            except Exception as detail_error:
+                logger.error(f"Error en clasificación detallada: {detail_error}")
+                # Continuar sin clasificación detallada
         
         logger.info(f"Usuario {username} clasificó: '{request.text[:50]}...' -> {label}")
         
@@ -170,68 +254,53 @@ async def classify_comment(
             text=request.text,
             is_toxic=is_toxic,
             label=label,
-            probability=probability
+            probability=probability,
+            detailed_classification=detailed_classification,
+            timestamp=datetime.now().isoformat()
         )
         
     except Exception as e:
-        logger.error(f"Error en clasificación: {e}")
+        logger.error(f"Error al clasificar comentario: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor"
+            detail=f"Error interno del servidor: {str(e)}"
         )
 
-@app.post("/classify/batch", response_model=BatchResponse)
-async def classify_batch(
-    request: BatchRequest,
+@app.post("/classify-batch")
+async def classify_batch_comments(
+    comments: List[str],
+    include_detailed: bool = False,
     username: str = Depends(get_current_user)
 ):
-    """Clasificar múltiples comentarios en lote"""
+    """Clasificar múltiples comentarios"""
     if clf is None or vectorizer is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Modelo no disponible"
-        )
-    
-    if len(request.comments) > 100:  # Límite de batch
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Máximo 100 comentarios por batch"
+            detail="Modelo básico no disponible"
         )
     
     try:
         results = []
         
-        for comment in request.comments:
-            # Vectorizar
-            X_new = vectorizer.transform([comment])
-            
-            # Predecir
-            prediction = clf.predict(X_new)[0]
-            is_toxic = bool(prediction)
-            label = "Tóxico" if is_toxic else "No tóxico"
-            
-            # Probabilidad opcional
-            probability = None
-            if request.include_probability:
-                prob_scores = clf.predict_proba(X_new)[0]
-                probability = float(prob_scores[1])
-            
-            results.append(CommentResponse(
+        for comment in comments:
+            request = CommentRequest(
                 text=comment,
-                is_toxic=is_toxic,
-                label=label,
-                probability=probability
-            ))
+                include_probability=True,
+                include_detailed_classification=include_detailed
+            )
+            
+            # Reutilizar la lógica del endpoint individual
+            result = await classify_comment(request, username)
+            results.append(result)
         
-        logger.info(f"Usuario {username} procesó batch de {len(request.comments)} comentarios")
-        
-        return BatchResponse(
-            results=results,
-            total_processed=len(results)
-        )
+        return {
+            "results": results,
+            "total_processed": len(comments),
+            "timestamp": datetime.now().isoformat()
+        }
         
     except Exception as e:
-        logger.error(f"Error en batch: {e}")
+        logger.error(f"Error en clasificación por lotes: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor"
