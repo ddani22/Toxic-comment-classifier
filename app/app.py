@@ -48,8 +48,12 @@ with st.sidebar:
     st.write(f"**Clasificación detallada:** {'✅ Disponible' if detailed_available else '❌ No disponible'}")
     
     if detailed_available:
-        st.write(f"**Categorías detectables:** {len(toxicity_categories)}")
-        st.write(f"**Vocabulario:** {len(detailed_vectorizer.vocabulary_):,} palabras")
+        if toxicity_categories is not None:
+            st.write(f"**Categorías detectables:** {len(toxicity_categories)}")
+        if detailed_vectorizer is not None and hasattr(detailed_vectorizer, 'vocabulary_'):
+            st.write(f"**Vocabulario:** {len(detailed_vectorizer.vocabulary_):,} palabras")
+        else:
+            st.write("**Vocabulario:** No disponible")
 
 # Input del usuario
 col1, col2 = st.columns([2, 1])
@@ -99,7 +103,9 @@ if st.button("🔍 Clasificar Comentario", type="primary"):
                         st.metric("Probabilidad No Tóxico", f"{prob_safe:.1%}")
                 
                 # Análisis detallado (solo si es tóxico y está disponible)
-                if show_detailed and is_toxic and detailed_available:
+                if (show_detailed and is_toxic and detailed_available and 
+                    detailed_clf is not None and detailed_vectorizer is not None and 
+                    toxicity_categories is not None):
                     st.markdown("---")
                     st.subheader("🔬 Análisis Detallado de Toxicidad")
                     
