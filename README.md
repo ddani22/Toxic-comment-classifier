@@ -399,3 +399,20 @@ Las contribuciones son bienvenidas!
 Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detalles.
 
 ---
+
+## 👨‍💻 Autor
+
+**Daniel Moreno**
+
+- GitHub: [@tu-usuario](https://github.com/tu-usuario)
+- LinkedIn: [Tu Perfil](https://linkedin.com/in/tu-perfil)
+
+---
+
+## 🙏 Agradecimientos
+
+- Dataset basado en [Toxic Comment Classification Challenge](https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge)
+- Inspirado en investigaciones de NLP y moderación de contenido
+- Comunidad de scikit-learn y Streamlit
+
+---
