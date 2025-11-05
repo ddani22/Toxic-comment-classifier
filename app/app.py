@@ -190,22 +190,24 @@ if st.button("🔍 Clasificar Comentario", type="primary"):
 st.markdown("---")
 with st.expander("💡 Ejemplos de comentarios para probar"):
     st.markdown("""
-    **Comentarios no tóxicos:**
-    - "Me gusta mucho este artículo, muy informativo."
-    - "Gracias por compartir tu opinión, es muy interesante."
+    **Non-toxic comments:**
+    - "I really appreciate this article, very informative and well written."
+    - "Thanks for sharing your perspective, it's quite interesting."
+    - "This is a great discussion, I learned a lot from it."
     
-    **Comentarios potencialmente tóxicos:**
-    - "Eres un idiota por pensar eso."
-    - "Tu opinión es basura y no vale nada."
+    **Potentially toxic comments:**
+    - "You are an idiot for thinking that way."
+    - "Your opinion is complete garbage and worthless."
+    - "Shut up you stupid fool, nobody cares what you think."
     
-    *Nota: Estos ejemplos son solo para fines de demostración.*
+    *Note: These examples are for demonstration purposes only.*
     """)
 
 # Footer
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray;'>"
-    "🔎 Toxic Comment Classifier | Powered by Machine Learning"
+    "🔎 Toxic Comment Classifier | Daniel Moreno"
     "</div>", 
     unsafe_allow_html=True
 )
